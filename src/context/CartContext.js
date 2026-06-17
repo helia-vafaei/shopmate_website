@@ -1,6 +1,8 @@
-import { useContext, useReducer } from "react";
+import { useContext, useEffect, useReducer } from "react";
 import { createContext } from "react";
 import { cartReducer } from "../reducer/cartReducer";
+
+const CART_STORAGE_KEY = "cartList";
 
 const initialState = {
     cartList: [],
@@ -9,8 +11,39 @@ const initialState = {
 
 const CartContext = createContext(initialState);   // Think of this as creating a backpack that holds your cart data.
 
+const calculateTotal = (products = []) => {
+    return products.reduce((sum, product) => sum + Number(product.price || 0), 0);
+};
+
+const getInitialState = () => {
+    if (typeof window === "undefined") {
+        return initialState;
+    }
+
+    try {
+        const savedCart = window.localStorage.getItem(CART_STORAGE_KEY);
+        const parsedCart = savedCart ? JSON.parse(savedCart) : [];
+        const cartList = Array.isArray(parsedCart) ? parsedCart : [];
+
+        return {
+            cartList,
+            total: calculateTotal(cartList)
+        };
+    } catch (error) {
+        return initialState;
+    }
+};
+
 export const CartProvider = ({children}) => {
-    const [state, dispatch] = useReducer(cartReducer, initialState);
+    const [state, dispatch] = useReducer(cartReducer, initialState, getInitialState);
+
+    useEffect(() => {
+        try {
+            window.localStorage.setItem(CART_STORAGE_KEY, JSON.stringify(state.cartList));
+        } catch (error) {
+            // Ignore storage failures so cart actions still work in memory.
+        }
+    }, [state.cartList]);
 
     // state = the current cart (cartList and total)
     // dispatch = function you call to change the cart
@@ -41,8 +74,7 @@ export const CartProvider = ({children}) => {
     }
 
     const updateTotal = (products) => {
-        let total = 0;
-        products.forEach(product => total = total + product.price);
+        const total = calculateTotal(products);
 
         dispatch({
             type: "UPDATE_TOTAL",
